@@ -27,6 +27,7 @@ template <typename T>
 T readParam(ros::NodeHandle &n, std::string name)
 {
     T ans;
+    // 从参数服务器上获取指定Key的Value
     if (n.getParam(name, ans))
     {
         ROS_INFO_STREAM("Loaded " << name << ": " << ans);
@@ -43,6 +44,7 @@ void readParameters(ros::NodeHandle &n)
 {
     std::string config_file;
     config_file = readParam<std::string>(n, "config_file");
+
     cv::FileStorage fsSettings(config_file, cv::FileStorage::READ);
     if(!fsSettings.isOpened())
     {
@@ -51,9 +53,11 @@ void readParameters(ros::NodeHandle &n)
 
     fsSettings["imu_topic"] >> IMU_TOPIC;
 
+    // 后端
     SOLVER_TIME = fsSettings["max_solver_time"];
     NUM_ITERATIONS = fsSettings["max_num_iterations"];
     MIN_PARALLAX = fsSettings["keyframe_parallax"];
+    // 归一化平面上的最小视差
     MIN_PARALLAX = MIN_PARALLAX / FOCAL_LENGTH;
 
     std::string OUTPUT_PATH;
@@ -67,6 +71,7 @@ void readParameters(ros::NodeHandle &n)
     std::ofstream fout(VINS_RESULT_PATH, std::ios::out);
     fout.close();
 
+    // 传感器参数
     ACC_N = fsSettings["acc_n"];
     ACC_W = fsSettings["acc_w"];
     GYR_N = fsSettings["gyr_n"];
@@ -74,9 +79,14 @@ void readParameters(ros::NodeHandle &n)
     G.z() = fsSettings["g_norm"];
     ROW = fsSettings["image_height"];
     COL = fsSettings["image_width"];
+    // 输出一下图像的宽和高
     ROS_INFO("ROW: %f COL: %f ", ROW, COL);
 
+
+    //IMU和CAM的外参是否提供
     ESTIMATE_EXTRINSIC = fsSettings["estimate_extrinsic"];
+
+    // 不提供初值 赋值给单位阵
     if (ESTIMATE_EXTRINSIC == 2)
     {
         ROS_WARN("have no prior about extrinsic param, calibrate extrinsic param");
@@ -87,14 +97,18 @@ void readParameters(ros::NodeHandle &n)
     }
     else 
     {
+        // 不准确 给初值在线优化
         if ( ESTIMATE_EXTRINSIC == 1)
         {
             ROS_WARN(" Optimize extrinsic param around initial guess!");
             EX_CALIB_RESULT_PATH = OUTPUT_PATH + "/extrinsic_parameter.csv";
         }
+
+        // 给一个固定值,不优化
         if (ESTIMATE_EXTRINSIC == 0)
             ROS_WARN(" fix extrinsic param ");
 
+        // 从配置文件里读取一下参数
         cv::Mat cv_R, cv_T;
         fsSettings["extrinsicRotation"] >> cv_R;
         fsSettings["extrinsicTranslation"] >> cv_T;
@@ -111,10 +125,8 @@ void readParameters(ros::NodeHandle &n)
         
     } 
 
-    INIT_DEPTH = 5.0;
-    BIAS_ACC_THRESHOLD = 0.1;
-    BIAS_GYR_THRESHOLD = 0.1;
 
+    //IMU和cam时间校准
     TD = fsSettings["td"];
     ESTIMATE_TD = fsSettings["estimate_td"];
     if (ESTIMATE_TD)
@@ -122,6 +134,7 @@ void readParameters(ros::NodeHandle &n)
     else
         ROS_INFO_STREAM("Synchronized sensors, fix time offset: " << TD);
 
+    // 卷帘相机
     ROLLING_SHUTTER = fsSettings["rolling_shutter"];
     if (ROLLING_SHUTTER)
     {
@@ -134,4 +147,10 @@ void readParameters(ros::NodeHandle &n)
     }
     
     fsSettings.release();
+
+    // TODO 干啥的?
+    INIT_DEPTH = 5.0;
+    BIAS_ACC_THRESHOLD = 0.1;
+    BIAS_GYR_THRESHOLD = 0.1;
+
 }

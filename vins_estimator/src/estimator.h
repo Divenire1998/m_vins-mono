@@ -71,6 +71,7 @@ class Estimator
     Matrix3d ric[NUM_OF_CAM];
     Vector3d tic[NUM_OF_CAM];
 
+    // 滑窗中的PVQB
     Vector3d Ps[(WINDOW_SIZE + 1)];
     Vector3d Vs[(WINDOW_SIZE + 1)];
     Matrix3d Rs[(WINDOW_SIZE + 1)];
@@ -92,7 +93,9 @@ class Estimator
     int frame_count;
     int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
 
+    // 特征点管理器
     FeatureManager f_manager;
+    
     MotionEstimator m_estimator;
     InitialEXRotation initial_ex_rotation;
 

@@ -33,24 +33,33 @@ include_directories(
 catkin_package()
 
 add_executable(vins_estimator
+
+    # 节点
     src/estimator_node.cpp
-    src/parameters.cpp
+    # 后端
     src/estimator.cpp
+
+    src/parameters.cpp
     src/feature_manager.cpp
+
+    # 各自约束关系
     src/factor/pose_local_parameterization.cpp
     src/factor/projection_factor.cpp
     src/factor/projection_td_factor.cpp
     src/factor/marginalization_factor.cpp
+
     src/utility/utility.cpp
     src/utility/visualization.cpp
     src/utility/CameraPoseVisualization.cpp
+
+    # 初始化
     src/initial/solve_5pts.cpp
     src/initial/initial_aligment.cpp
     src/initial/initial_sfm.cpp
     src/initial/initial_ex_rotation.cpp
     )
 
-
+# 添加依赖库
 target_link_libraries(vins_estimator ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
 
 

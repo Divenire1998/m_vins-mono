@@ -3,11 +3,19 @@
     <arg name="config_path" default = "$(find feature_tracker)/../config/euroc/euroc_config.yaml" />
 	<arg name="vins_path" default = "$(find feature_tracker)/../config/../" />
     
+    <!-- 启动rviz -->
+    <include file = "$(find vins_estimator)/launch/vins_rviz.launch" />
+
+    <!-- 启动ROSBAG -->
+    <node pkg="rosbag" type="play" name="play" 
+    args = "/media/divenire/C86BCECE98B60C8B/0_myWorkSpace/Datasets/Euroc/bag/MH_05_difficult.bag"
+    output = "log" />
+
     <!-- 启动feature_tracker节点 并传入包和配置文件的路径 -->
     <!-- name:节点名称（ROS拓扑中） -->
     <!-- pkg 节点所属的包名 -->
     <!-- type 可执行文件的名称 -->
-    <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="screen">
+    <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="log">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <param name="vins_folder" type="string" value="$(arg vins_path)" />
     </node>

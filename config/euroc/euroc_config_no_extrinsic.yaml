@@ -3,7 +3,7 @@
 #common parameters
 imu_topic: "/imu0"
 image_topic: "/cam0/image_raw"
-output_path: "/home/tony-ws1/output/"
+output_path: "/home/divenire/0_myWorkSpace/Divenire_ws/workingProgram/vins/catkin_vins_origin/src/VINS-Mono/results/"
 
 #camera calibration 
 model_type: PINHOLE
@@ -26,6 +26,21 @@ estimate_extrinsic: 2   # 0  Have an accurate extrinsic parameters. We will trus
                         # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
                         # 2  Don't know anything about extrinsic parameters. You don't need to give R,T. We will try to calibrate it. Do some rotation movement at beginning.                        
 #If you choose 0 or 1, you should write down the following matrix.
+# extrinsicRotation: !!opencv-matrix
+#    rows: 3
+#    cols: 3
+#    dt: d
+#    data: [0.0148655429818, -0.999880929698, 0.00414029679422,
+#            0.999557249008, 0.0149672133247, 0.025715529948, 
+#            -0.0257744366974, 0.00375618835797, 0.999660727178]
+# #Translation from camera frame to imu frame, imu^T_cam
+# extrinsicTranslation: !!opencv-matrix
+#    rows: 3
+#    cols: 1
+#    dt: d
+#    data: [-0.0216401454975,-0.064676986768, 0.00981073058949]
+
+
 
 #feature traker paprameters
 max_cnt: 150            # max feature number in feature tracking

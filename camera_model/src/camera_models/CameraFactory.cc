@@ -97,6 +97,8 @@ CameraFactory::generateCameraFromYamlFile(const std::string& filename)
     }
 
     Camera::ModelType modelType = Camera::MEI;
+
+    // 设置相机模型
     if (!fs["model_type"].isNone())
     {
         std::string sModelType;
@@ -139,7 +141,7 @@ CameraFactory::generateCameraFromYamlFile(const std::string& filename)
     case Camera::PINHOLE:
     {
         PinholeCameraPtr camera(new PinholeCamera);
-
+        // 设置相机的内参和畸变情况
         PinholeCamera::Parameters params = camera->getParameters();
         params.readFromYamlFile(filename);
         camera->setParameters(params);
