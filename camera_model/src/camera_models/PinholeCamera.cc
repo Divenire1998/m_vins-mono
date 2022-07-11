@@ -442,7 +442,8 @@ namespace camodocal
         // double lambda;
 
         // Lift points to normalised plane
-        // 反投影到归一化相机坐标系
+        // 将像素坐标反投影到归一化相机坐标系，得到归一化的坐标（含有畸变）
+        // p(0)p(1)是像素坐标
         mx_d = m_inv_K11 * p(0) + m_inv_K13;
         my_d = m_inv_K22 * p(1) + m_inv_K23;
 
@@ -480,12 +481,18 @@ namespace camodocal
             {
                 // Recursive distortion model
                 int n = 8;
+
+                // d_u表示当前像素点（有畸变）畸变后的点，即B',C'等点
+                // 代表强度，用于迭代，直到迭代点在误差允许范围内接近目标点，即可近似求得目标坐标
                 Eigen::Vector2d d_u;
+                // 第一次得到靠近目标点的一个坐标值
+                // 减d_u()的目的是为了得到临时点的坐标，因为临时点在靠近目标点的一侧。即得到C,D等逐渐靠近原始点A
                 distortion(Eigen::Vector2d(mx_d, my_d), d_u);
                 // Approximate value
                 mx_u = mx_d - d_u(0);
                 my_u = my_d - d_u(1);
 
+                // 迭代n次找靠近目标点的临时点，认为迭代n次后就认为接近目标点了（在允许的误差范围内）
                 for (int i = 1; i < n; ++i)
                 {
                     distortion(Eigen::Vector2d(mx_u, my_u), d_u);
@@ -496,6 +503,7 @@ namespace camodocal
         }
 
         // Obtain a projective ray
+        // 去畸变后的点在归一化平面下的坐标
         P << mx_u, my_u, 1.0;
     }
 
@@ -634,6 +642,7 @@ PinholeCamera::spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p,
     void
     PinholeCamera::distortion(const Eigen::Vector2d &p_u, Eigen::Vector2d &d_u) const
     {
+        // 读取相机内参
         double k1 = mParameters.k1();
         double k2 = mParameters.k2();
         double p1 = mParameters.p1();
@@ -641,6 +650,7 @@ PinholeCamera::spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p,
 
         double mx2_u, my2_u, mxy_u, rho2_u, rad_dist_u;
 
+        // 计算畸变部分的强度
         mx2_u = p_u(0) * p_u(0);
         my2_u = p_u(1) * p_u(1);
         mxy_u = p_u(0) * p_u(1);

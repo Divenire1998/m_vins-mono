@@ -105,6 +105,13 @@ void update()
         predict(tmp_imu_buf.front());
 }
 
+/**
+ * @brief   对imu和图像数据进行对齐并组合
+ * @Description     img:    i -------- j  -  -------- k
+ *                  imu:    - jjjjjjjj - j/k kkkkkkkk -  
+ *                  直到把缓存中的图像特征数据或者IMU数据取完，才能够跳出此函数，并返回数据           
+ * @return  vector<std::pair<vector<ImuConstPtr>, PointCloudConstPtr>> (IMUs, img_msg)s
+*/
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>>
 getMeasurements()
 {
@@ -112,6 +119,7 @@ getMeasurements()
 
     while (true)
     {
+        // 只要IMU_buf 或者 图像的buf还有就一直读
         if (imu_buf.empty() || feature_buf.empty())
             return measurements;
 
@@ -186,9 +194,6 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 
     //唤醒作用于process线程中的获取观测值数据的函数
     con.notify_one();
-
-    // 重复赋值？
-    last_imu_t = imu_msg->header.stamp.toSec();
 
     {
         std::lock_guard<std::mutex> lg(m_state);
@@ -291,6 +296,7 @@ void process()
         con.wait(lk, [&]
                  { return (measurements = getMeasurements()).size() != 0; });
 
+        
         // 数据buffer的锁解锁，回调可以继续塞数据了
         lk.unlock();
         // 进行后端求解，不能和复位重启冲突
@@ -304,13 +310,13 @@ void process()
             // 加速度和角速度
             double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
 
-            // 遍历IMU
+             // 对两帧图像之间的IMU进行处理
             for (auto &imu_msg : measurement.first)
             {
                 double t = imu_msg->header.stamp.toSec();
                 double img_t = img_msg->header.stamp.toSec() + estimator.td;
 
-                // 发送IMU数据进行预积分
+                
                 if (t <= img_t)
                 {
                     if (current_time < 0)
@@ -329,7 +335,8 @@ void process()
                     estimator.processIMU(dt, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
                     // printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
                 }
-                else // 这就是针对最后一个imu数据，需要做一个简单的线性插值
+                // 这就是针对最后一个imu数据，需要做一个简单的线性插值，然后再
+                else 
                 {
                     double dt_1 = img_t - current_time;
                     double dt_2 = t - img_t;
@@ -353,7 +360,8 @@ void process()
             // set relocalization frame
             // 回环相关部分
             sensor_msgs::PointCloudConstPtr relo_msg = NULL;
-            while (!relo_buf.empty()) // 取出最新的回环帧
+            // 取出所有的回环帧
+            while (!relo_buf.empty()) 
             {
                 relo_msg = relo_buf.front();
                 relo_buf.pop();
@@ -374,6 +382,7 @@ void process()
                     u_v_id.z() = relo_msg->points[i].z;
                     match_points.push_back(u_v_id);
                 }
+
                 // 回环帧的位姿
                 Vector3d relo_t(relo_msg->channels[0].values[0], relo_msg->channels[0].values[1], relo_msg->channels[0].values[2]);
                 Quaterniond relo_q(relo_msg->channels[0].values[3], relo_msg->channels[0].values[4], relo_msg->channels[0].values[5], relo_msg->channels[0].values[6]);
@@ -385,9 +394,10 @@ void process()
 
             // 开始处理图像数据
             ROS_DEBUG("processing vision data with stamp %f \n", img_msg->header.stamp.toSec());
-
             TicToc t_s;
-            //建立每个特征点的(camera_id,[x,y,z,u,v,vx,vy])s的map，索引为feature_id
+
+            // 前端的图像是由特征点组成的，每个特征点包含位置和数据信息，以及名字ID号
+            // 建立每个特征点的(camera_id,[x,y,z,u,v,vx,vy])s的map，索引为feature_id
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
             for (unsigned int i = 0; i < img_msg->points.size(); i++)
             {
@@ -432,7 +442,6 @@ void process()
         m_buf.lock();
         m_state.lock();
 
-        
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
             update();
         m_state.unlock();
@@ -447,8 +456,13 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "vins_estimator");
     ros::NodeHandle n("~");
 
+    // chinese
+    setlocale(LC_CTYPE, "zh_CN.utf8");
+    setlocale(LC_ALL, "");
+
+
     // 设置消息等级
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
 
     // 从config文件中读取参数
     readParameters(n);

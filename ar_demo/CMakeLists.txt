@@ -6,6 +6,10 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -DEIGEN_DONT_PARALLELIZE")
 #-DEIGEN_USE_MKL_ALL")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
+
+
+
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy

@@ -1,8 +1,9 @@
 #include "solve_5pts.h"
+#include "../parameters.h"
 
-
-namespace cv {
-    void decomposeEssentialMat( InputArray _E, OutputArray _R1, OutputArray _R2, OutputArray _t )
+namespace cv
+{
+    void decomposeEssentialMat(InputArray _E, OutputArray _R1, OutputArray _R2, OutputArray _t)
     {
 
         Mat E = _E.getMat().reshape(1, 3);
@@ -11,8 +12,10 @@ namespace cv {
         Mat D, U, Vt;
         SVD::compute(E, D, U, Vt);
 
-        if (determinant(U) < 0) U *= -1.;
-        if (determinant(Vt) < 0) Vt *= -1.;
+        if (determinant(U) < 0)
+            U *= -1.;
+        if (determinant(Vt) < 0)
+            Vt *= -1.;
 
         Mat W = (Mat_<double>(3, 3) << 0, 1, 0, -1, 0, 0, 0, 0, 1);
         W.convertTo(W, E.type());
@@ -27,8 +30,8 @@ namespace cv {
         t.copyTo(_t);
     }
 
-    int recoverPose( InputArray E, InputArray _points1, InputArray _points2, InputArray _cameraMatrix,
-                         OutputArray _R, OutputArray _t, InputOutputArray _mask)
+    int recoverPose(InputArray E, InputArray _points1, InputArray _points2, InputArray _cameraMatrix,
+                    OutputArray _R, OutputArray _t, InputOutputArray _mask)
     {
 
         Mat points1, points2, cameraMatrix;
@@ -37,8 +40,8 @@ namespace cv {
         _cameraMatrix.getMat().convertTo(cameraMatrix, CV_64F);
 
         int npoints = points1.checkVector(2);
-        CV_Assert( npoints >= 0 && points2.checkVector(2) == npoints &&
-                                  points1.type() == points2.type());
+        CV_Assert(npoints >= 0 && points2.checkVector(2) == npoints &&
+                  points1.type() == points2.type());
 
         CV_Assert(cameraMatrix.rows == 3 && cameraMatrix.cols == 3 && cameraMatrix.channels() == 1);
 
@@ -48,10 +51,10 @@ namespace cv {
             points2 = points2.reshape(1, npoints);
         }
 
-        double fx = cameraMatrix.at<double>(0,0);
-        double fy = cameraMatrix.at<double>(1,1);
-        double cx = cameraMatrix.at<double>(0,2);
-        double cy = cameraMatrix.at<double>(1,2);
+        double fx = cameraMatrix.at<double>(0, 0);
+        double fy = cameraMatrix.at<double>(1, 1);
+        double cx = cameraMatrix.at<double>(0, 2);
+        double cy = cameraMatrix.at<double>(1, 2);
 
         points1.col(0) = (points1.col(0) - cx) / fx;
         points2.col(0) = (points2.col(0) - cx) / fx;
@@ -65,10 +68,14 @@ namespace cv {
         decomposeEssentialMat(E, R1, R2, t);
         Mat P0 = Mat::eye(3, 4, R1.type());
         Mat P1(3, 4, R1.type()), P2(3, 4, R1.type()), P3(3, 4, R1.type()), P4(3, 4, R1.type());
-        P1(Range::all(), Range(0, 3)) = R1 * 1.0; P1.col(3) = t * 1.0;
-        P2(Range::all(), Range(0, 3)) = R2 * 1.0; P2.col(3) = t * 1.0;
-        P3(Range::all(), Range(0, 3)) = R1 * 1.0; P3.col(3) = -t * 1.0;
-        P4(Range::all(), Range(0, 3)) = R2 * 1.0; P4.col(3) = -t * 1.0;
+        P1(Range::all(), Range(0, 3)) = R1 * 1.0;
+        P1.col(3) = t * 1.0;
+        P2(Range::all(), Range(0, 3)) = R2 * 1.0;
+        P2.col(3) = t * 1.0;
+        P3(Range::all(), Range(0, 3)) = R1 * 1.0;
+        P3.col(3) = -t * 1.0;
+        P4(Range::all(), Range(0, 3)) = R2 * 1.0;
+        P4.col(3) = -t * 1.0;
 
         // Do the cheirality check.
         // Notice here a threshold dist is used to filter
@@ -153,14 +160,16 @@ namespace cv {
         {
             R1.copyTo(_R);
             t.copyTo(_t);
-            if (_mask.needed()) mask1.copyTo(_mask);
+            if (_mask.needed())
+                mask1.copyTo(_mask);
             return good1;
         }
         else if (good2 >= good1 && good2 >= good3 && good2 >= good4)
         {
             R2.copyTo(_R);
             t.copyTo(_t);
-            if (_mask.needed()) mask2.copyTo(_mask);
+            if (_mask.needed())
+                mask2.copyTo(_mask);
             return good2;
         }
         else if (good3 >= good1 && good3 >= good2 && good3 >= good4)
@@ -168,7 +177,8 @@ namespace cv {
             t = -t;
             R1.copyTo(_R);
             t.copyTo(_t);
-            if (_mask.needed()) mask3.copyTo(_mask);
+            if (_mask.needed())
+                mask3.copyTo(_mask);
             return good3;
         }
         else
@@ -176,24 +186,36 @@ namespace cv {
             t = -t;
             R2.copyTo(_R);
             t.copyTo(_t);
-            if (_mask.needed()) mask4.copyTo(_mask);
+            if (_mask.needed())
+                mask4.copyTo(_mask);
             return good4;
         }
     }
 
-    int recoverPose( InputArray E, InputArray _points1, InputArray _points2, OutputArray _R,
-                         OutputArray _t, double focal, Point2d pp, InputOutputArray _mask)
+    int recoverPose(InputArray E, InputArray _points1, InputArray _points2, OutputArray _R,
+                    OutputArray _t, double focal, Point2d pp, InputOutputArray _mask)
     {
-        Mat cameraMatrix = (Mat_<double>(3,3) << focal, 0, pp.x, 0, focal, pp.y, 0, 0, 1);
+        Mat cameraMatrix = (Mat_<double>(3, 3) << focal, 0, pp.x, 0, focal, pp.y, 0, 0, 1);
         return cv::recoverPose(E, _points1, _points2, cameraMatrix, _R, _t, _mask);
     }
 }
 
-
+/**
+ * @brief   通过求解本质矩阵得到R,t
+ * @Description findFundamentalMat()采用RANSAC算法求解本质矩阵E
+ *              recoverPose()通过本质矩阵得到Rt
+                求Rt的对称变换，判断内点数大于12
+ * @param[in]   corres  对应特征点对
+ * @param[out]  Rotation    当前帧到参考帧的旋转矩阵
+ * @param[out]  Translation 当前帧到参考帧的平移向量
+ * @return      bool    true:内点数大于12
+*/
 bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &corres, Matrix3d &Rotation, Vector3d &Translation)
 {
     if (corres.size() >= 15)
     {
+
+        // 两帧之间的匹配点对
         vector<cv::Point2f> ll, rr;
         for (int i = 0; i < int(corres.size()); i++)
         {
@@ -201,30 +223,47 @@ bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &co
             rr.push_back(cv::Point2f(corres[i].second(0), corres[i].second(1)));
         }
         cv::Mat mask;
-        cv::Mat E = cv::findFundamentalMat(ll, rr, cv::FM_RANSAC, 0.3 / 460, 0.99, mask);
+
+        /**
+         *  Mat cv::findFundamentalMat(  返回通过RANSAC算法求解两幅图像之间的本质矩阵E
+         *      nputArray  points1,             第一幅图像点的数组
+         *      InputArray  points2,            第二幅图像点的数组
+         *      int     method = FM_RANSAC,     RANSAC 算法
+         *      double  param1 = 3.,            点到对极线的最大距离，超过这个值的点将被舍弃
+         *      double  param2 = 0.99,          矩阵正确的可信度
+         *      OutputArray mask = noArray()    在计算过程中没有被舍弃的点
+         *  )
+         */
+        // 0.3 /460 是归一化平面下
+        cv::Mat E = cv::findFundamentalMat(ll, rr, cv::FM_RANSAC, 0.3 / FOCAL_LENGTH, 0.99, mask);
+        // 已经是归一化相机坐标系了，因此内参阵用单位阵
         cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+
+        // Opencv恢复位姿来一波
         cv::Mat rot, trans;
         int inlier_cnt = cv::recoverPose(E, ll, rr, cameraMatrix, rot, trans, mask);
-        //cout << "inlier_cnt " << inlier_cnt << endl;
+        // cout << "inlier_cnt " << inlier_cnt << endl;
 
+
+        // Opencv计算的矩阵恢复到Eigen
         Eigen::Matrix3d R;
         Eigen::Vector3d T;
+
         for (int i = 0; i < 3; i++)
-        {   
+        {
             T(i) = trans.at<double>(i, 0);
             for (int j = 0; j < 3; j++)
                 R(i, j) = rot.at<double>(i, j);
         }
 
+        // opencv得到的是T21,这里换成T12
         Rotation = R.transpose();
         Translation = -R.transpose() * T;
-        if(inlier_cnt > 12)
+
+        if (inlier_cnt > 12)
             return true;
         else
             return false;
     }
     return false;
 }
-
-
-

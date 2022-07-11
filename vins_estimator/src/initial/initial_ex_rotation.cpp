@@ -10,27 +10,45 @@ InitialEXRotation::InitialEXRotation(){
 
 bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> corres, Quaterniond delta_q_imu, Matrix3d &calib_ric_result)
 {
+
+    // 此frame_count是初始化类中的
     frame_count++;
+
+    // 根据两帧之间的特征点关系，计算对极几何，得到旋转矩阵
     Rc.push_back(solveRelativeR(corres));
+
+    // 两个图像帧之间IMU的预积分约束
     Rimu.push_back(delta_q_imu.toRotationMatrix());
+
+    // 
     Rc_g.push_back(ric.inverse() * delta_q_imu * ric);
 
+    // 存四元数的矩阵
     Eigen::MatrixXd A(frame_count * 4, 4);
     A.setZero();
+
+
     int sum_ok = 0;
+
+    // frame_count
     for (int i = 1; i <= frame_count; i++)
     {
         Quaterniond r1(Rc[i]);
         Quaterniond r2(Rc_g[i]);
 
+        // 从旋转矩阵中计算角度的差值
         double angular_distance = 180 / M_PI * r1.angularDistance(r2);
-        ROS_DEBUG(
-            "%d %f", i, angular_distance);
 
+        // 
+        // ROS_DEBUG("frame %d 's angular_distance is %f", i, angular_distance);
+
+        // 根据角度差来设置huber函数
+        // 对于角度大于5度的，对应的权重给小一点
         double huber = angular_distance > 5.0 ? 5.0 / angular_distance : 1.0;
         ++sum_ok;
         Matrix4d L, R;
 
+        // 四元数的左矩阵 sola的书
         double w = Quaterniond(Rc[i]).w();
         Vector3d q = Quaterniond(Rc[i]).vec();
         L.block<3, 3>(0, 0) = w * Matrix3d::Identity() + Utility::skewSymmetric(q);
@@ -38,6 +56,7 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         L.block<1, 3>(3, 0) = -q.transpose();
         L(3, 3) = w;
 
+        // 四元数的右矩阵，sola的书
         Quaterniond R_ij(Rimu[i]);
         w = R_ij.w();
         q = R_ij.vec();
@@ -46,84 +65,144 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         R.block<1, 3>(3, 0) = -q.transpose();
         R(3, 3) = w;
 
+        // 构建A矩阵
         A.block<4, 4>((i - 1) * 4, 0) = huber * (L - R);
     }
 
+    // SVD分解得到最优的四元数
     JacobiSVD<MatrixXd> svd(A, ComputeFullU | ComputeFullV);
     Matrix<double, 4, 1> x = svd.matrixV().col(3);
     Quaterniond estimated_R(x);
     ric = estimated_R.toRotationMatrix().inverse();
+
     //cout << svd.singularValues().transpose() << endl;
     //cout << ric << endl;
+    // 外参的置信度
     Vector3d ric_cov;
     ric_cov = svd.singularValues().tail<3>();
+
+    // 至少11帧参与优化
+    // 倒数第二奇异值大于0.25
     if (frame_count >= WINDOW_SIZE && ric_cov(1) > 0.25)
     {
+        // 
+        ROS_DEBUG_STREAM("calib ex_rotation use"<<sum_ok);
         calib_ric_result = ric;
+
         return true;
     }
     else
         return false;
 }
 
+/**
+ * @brief: 根据两帧特征点求解两帧的旋转矩阵
+ * @param {vector<pair<Vector3d, Vector3d>>} &corres
+ * @return {*}
+ */
 Matrix3d InitialEXRotation::solveRelativeR(const vector<pair<Vector3d, Vector3d>> &corres)
 {
+    // 至少9对点
     if (corres.size() >= 9)
     {
         vector<cv::Point2f> ll, rr;
+
         for (int i = 0; i < int(corres.size()); i++)
         {
             ll.push_back(cv::Point2f(corres[i].first(0), corres[i].first(1)));
             rr.push_back(cv::Point2f(corres[i].second(0), corres[i].second(1)));
         }
+        // 根据匹配的特征点求解本质矩阵
+        // TODO 这样说来，其实ORB中可以借鉴一下，因为这里没有RANSAC，在一部分环境下可能出现误匹配
         cv::Mat E = cv::findFundamentalMat(ll, rr);
         cv::Mat_<double> R1, R2, t1, t2;
+
+        // 本质矩阵svd分解得到4组Rt解
         decomposeE(E, R1, R2, t1, t2);
 
-        if (determinant(R1) + 1.0 < 1e-09)
-        {
-            E = -E;
-            decomposeE(E, R1, R2, t1, t2);
-        }
+        // !这儿是我修改的
+        R1 = determinant(R1) * R1;
+        R2 = determinant(R2) * R2;
+        
+        // if (determinant(R1) + 1.0 < 1e-09)
+        // {
+        //     E = -E;
+        //     decomposeE(E, R1, R2, t1, t2);
+        // }
+
+        // 通过三角化得到的正深度选择Rt解
         double ratio1 = max(testTriangulation(ll, rr, R1, t1), testTriangulation(ll, rr, R1, t2));
         double ratio2 = max(testTriangulation(ll, rr, R2, t1), testTriangulation(ll, rr, R2, t2));
+
         cv::Mat_<double> ans_R_cv = ratio1 > ratio2 ? R1 : R2;
 
+        // cv格式的旋转矩阵转Eigen
         Matrix3d ans_R_eigen;
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
                 ans_R_eigen(j, i) = ans_R_cv(i, j);
+
+        
         return ans_R_eigen;
     }
     return Matrix3d::Identity();
 }
 
+
+/**
+ * @brief 通过三角化来检查R t是否合理
+ * 
+ * @param[in] l l相机的观测
+ * @param[in] r r相机的观测
+ * @param[in] R 旋转矩阵
+ * @param[in] t 位移
+ * @return double 
+ */
 double InitialEXRotation::testTriangulation(const vector<cv::Point2f> &l,
                                           const vector<cv::Point2f> &r,
                                           cv::Mat_<double> R, cv::Mat_<double> t)
 {
     cv::Mat pointcloud;
+    // 第一帧投影矩阵
     cv::Matx34f P = cv::Matx34f(1, 0, 0, 0,
                                 0, 1, 0, 0,
                                 0, 0, 1, 0);
+
+    // 第二帧的投影矩阵
+    // Tcw
     cv::Matx34f P1 = cv::Matx34f(R(0, 0), R(0, 1), R(0, 2), t(0),
                                  R(1, 0), R(1, 1), R(1, 2), t(1),
                                  R(2, 0), R(2, 1), R(2, 2), t(2));
+
+    // 恢复出来的点云是在第一帧坐标系下的
     cv::triangulatePoints(P, P1, l, r, pointcloud);
+
     int front_count = 0;
     for (int i = 0; i < pointcloud.cols; i++)
     {
+        // 因为是齐次的，所以要求最后一维等于1
         double normal_factor = pointcloud.col(i).at<float>(3);
 
+        // 得到在各自相机坐标系下的3d坐标
         cv::Mat_<double> p_3d_l = cv::Mat(P) * (pointcloud.col(i) / normal_factor);
         cv::Mat_<double> p_3d_r = cv::Mat(P1) * (pointcloud.col(i) / normal_factor);
+        // 通过深度是否大于0来判断是否合理
         if (p_3d_l(2) > 0 && p_3d_r(2) > 0)
             front_count++;
     }
+
+    // 返回内点率
     ROS_DEBUG("MotionEstimator: %f", 1.0 * front_count / pointcloud.cols);
     return 1.0 * front_count / pointcloud.cols;
 }
 
+
+
+/**
+ * @brief:  本质矩阵分解旋转和平移
+ * @param {Mat} E
+ * @return {*}
+ */
 void InitialEXRotation::decomposeE(cv::Mat E,
                                  cv::Mat_<double> &R1, cv::Mat_<double> &R2,
                                  cv::Mat_<double> &t1, cv::Mat_<double> &t2)

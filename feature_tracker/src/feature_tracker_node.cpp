@@ -101,6 +101,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     cv::Mat show_img = ptr->image;
 
     TicToc t_r;
+    // 处理图像数据
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ROS_DEBUG("processing camera %d", i);
@@ -163,6 +164,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             auto &pts_velocity = trackerData[i].pts_velocity; // 归一化坐标下的速度
 
             // 只发布追踪大于1的，因为等于1没法构成重投影约束，也没法三角化
+            // 也就是当前帧新提取的特征点是不会发布的
             for (unsigned int j = 0; j < ids.size(); j++)
             {
                 if (trackerData[i].track_cnt[j] > 1)
@@ -291,7 +293,7 @@ int main(int argc, char **argv)
     pub_match = n.advertise<sensor_msgs::Image>("feature_img", 1000);
     pub_restart = n.advertise<std_msgs::Bool>("restart", 1000);
 
-    // 使用OPENCV 绘制跟踪情况
+    // 使用OPENCV 绘制光流跟踪情况
     if (SHOW_TRACK)
         cv::namedWindow("vis", cv::WINDOW_NORMAL);
     ros::spin();
