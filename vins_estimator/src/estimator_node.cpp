@@ -108,10 +108,10 @@ void update()
 /**
  * @brief   对imu和图像数据进行对齐并组合
  * @Description     img:    i -------- j  -  -------- k
- *                  imu:    - jjjjjjjj - j/k kkkkkkkk -  
- *                  直到把缓存中的图像特征数据或者IMU数据取完，才能够跳出此函数，并返回数据           
+ *                  imu:    - jjjjjjjj - j/k kkkkkkkk -
+ *                  直到把缓存中的图像特征数据或者IMU数据取完，才能够跳出此函数，并返回数据
  * @return  vector<std::pair<vector<ImuConstPtr>, PointCloudConstPtr>> (IMUs, img_msg)s
-*/
+ */
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>>
 getMeasurements()
 {
@@ -296,7 +296,6 @@ void process()
         con.wait(lk, [&]
                  { return (measurements = getMeasurements()).size() != 0; });
 
-        
         // 数据buffer的锁解锁，回调可以继续塞数据了
         lk.unlock();
         // 进行后端求解，不能和复位重启冲突
@@ -307,16 +306,16 @@ void process()
         {
             //对应这段的img data
             auto img_msg = measurement.second;
+
+            // =============== 处理IMU数据，预积分，前向递推传播 ====================
             // 加速度和角速度
             double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
-
-             // 对两帧图像之间的IMU进行处理
+            // 对两帧图像之间的IMU进行处理
             for (auto &imu_msg : measurement.first)
             {
                 double t = imu_msg->header.stamp.toSec();
                 double img_t = img_msg->header.stamp.toSec() + estimator.td;
 
-                
                 if (t <= img_t)
                 {
                     if (current_time < 0)
@@ -336,7 +335,7 @@ void process()
                     // printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
                 }
                 // 这就是针对最后一个imu数据，需要做一个简单的线性插值，然后再
-                else 
+                else
                 {
                     double dt_1 = img_t - current_time;
                     double dt_2 = t - img_t;
@@ -357,11 +356,14 @@ void process()
                 }
             }
 
+            // =============== 回环检测 ====================
+            // TODO
+
             // set relocalization frame
             // 回环相关部分
             sensor_msgs::PointCloudConstPtr relo_msg = NULL;
             // 取出所有的回环帧
-            while (!relo_buf.empty()) 
+            while (!relo_buf.empty())
             {
                 relo_msg = relo_buf.front();
                 relo_buf.pop();
@@ -374,6 +376,7 @@ void process()
 
                 // 回环的当前帧时间戳
                 double frame_stamp = relo_msg->header.stamp.toSec();
+
                 for (unsigned int i = 0; i < relo_msg->points.size(); i++)
                 {
                     Vector3d u_v_id;
@@ -391,6 +394,8 @@ void process()
                 frame_index = relo_msg->channels[0].values[7];
                 estimator.setReloFrame(frame_stamp, frame_index, match_points, relo_t, relo_r);
             }
+
+            // =============== 紧耦合VIO实现 ====================
 
             // 开始处理图像数据
             ROS_DEBUG("processing vision data with stamp %f \n", img_msg->header.stamp.toSec());
@@ -416,8 +421,13 @@ void process()
                 xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
                 image[feature_id].emplace_back(camera_id, xyz_uv_velocity);
             }
-            // 处理图像特征
+
+            // 紧耦合VIO
             estimator.processImage(image, img_msg->header);
+
+
+             // =============== 输出调试信息 ====================
+
 
             // 输出统计信息
             double whole_t = t_s.toc();
@@ -460,9 +470,8 @@ int main(int argc, char **argv)
     setlocale(LC_CTYPE, "zh_CN.utf8");
     setlocale(LC_ALL, "");
 
-
     // 设置消息等级
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
 
     // 从config文件中读取参数
     readParameters(n);

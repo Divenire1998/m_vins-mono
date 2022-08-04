@@ -97,16 +97,21 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     }
     else
         ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
-        
+
     cv::Mat show_img = ptr->image;
+
+
+    // ======= 对每张图像提取特征点，进行光流追踪 ===========
 
     TicToc t_r;
     // 处理图像数据
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ROS_DEBUG("processing camera %d", i);
+
         // 单目
         if (i != 1 || !STEREO_TRACK)
+            // 对图像进行一系列操作，光流跟踪
             trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
         // 双目
         else
@@ -230,9 +235,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     Vector2d tmp_cur_un_pts(trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);
                     Vector2d tmp_pts_velocity(trackerData[i].pts_velocity[j].x, trackerData[i].pts_velocity[j].y);
                     Vector3d tmp_prev_un_pts;
-                    
+
                     // 向后端发布得频率是10Hz，也就是0.1s 换算成特征点得运动距离 （归一化平面）
-                    tmp_prev_un_pts.head(2) = tmp_cur_un_pts - tmp_pts_velocity/FREQ;
+                    tmp_prev_un_pts.head(2) = tmp_cur_un_pts - tmp_pts_velocity / FREQ;
                     tmp_prev_un_pts.z() = 1;
 
                     Vector2d tmp_prev_uv;
@@ -259,8 +264,9 @@ int main(int argc, char **argv)
 {
     // ros初始化和设置句柄
     ros::init(argc, argv, "feature_tracker");
+    // 私有空间
     ros::NodeHandle n("~");
-
+    // 输出消息等级
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
 
     // 从config.yaml配置文件中读取参数

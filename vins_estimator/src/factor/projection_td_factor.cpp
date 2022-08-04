@@ -31,6 +31,7 @@ ProjectionTdFactor::ProjectionTdFactor(const Eigen::Vector3d &_pts_i, const Eige
 #endif
 };
 
+
 bool ProjectionTdFactor::Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
 {
     TicToc tic_toc;
@@ -43,23 +44,33 @@ bool ProjectionTdFactor::Evaluate(double const *const *parameters, double *resid
     Eigen::Vector3d tic(parameters[2][0], parameters[2][1], parameters[2][2]);
     Eigen::Quaterniond qic(parameters[2][6], parameters[2][3], parameters[2][4], parameters[2][5]);
 
+
+    // pts_i 是i时刻归一化相机坐标系下的3D坐标
+    //第i帧相机坐标系下的的逆深度
     double inv_dep_i = parameters[3][0];
 
+    // 时间偏移
     double td = parameters[4][0];
 
+    // 角点在归一化平面上的坐标（考虑时间戳误差）
+    // 分别在i系和j系下
     Eigen::Vector3d pts_i_td, pts_j_td;
     pts_i_td = pts_i - (td - td_i + TR / ROW * row_i) * velocity_i;
     pts_j_td = pts_j - (td - td_j + TR / ROW * row_j) * velocity_j;
+    
+    // 通过位姿将角点在i系下的坐标变换到j系下
     Eigen::Vector3d pts_camera_i = pts_i_td / inv_dep_i;
     Eigen::Vector3d pts_imu_i = qic * pts_camera_i + tic;
     Eigen::Vector3d pts_w = Qi * pts_imu_i + Pi;
     Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);
     Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
+    
     Eigen::Map<Eigen::Vector2d> residual(residuals);
 
 #ifdef UNIT_SPHERE_ERROR 
     residual =  tangent_base * (pts_camera_j.normalized() - pts_j_td.normalized());
 #else
+    // 重投影误差 见论文笔记
     double dep_j = pts_camera_j.z();
     residual = (pts_camera_j / dep_j).head<2>() - pts_j_td.head<2>();
 #endif
@@ -128,6 +139,8 @@ bool ProjectionTdFactor::Evaluate(double const *const *parameters, double *resid
             Eigen::Map<Eigen::Vector2d> jacobian_feature(jacobians[3]);
             jacobian_feature = reduce * ric.transpose() * Rj.transpose() * Ri * ric * pts_i_td * -1.0 / (inv_dep_i * inv_dep_i);
         }
+
+        // 重投影误差对时间的偏移求导，见VINS-mono论文笔记
         if (jacobians[4])
         {
             Eigen::Map<Eigen::Vector2d> jacobian_td(jacobians[4]);

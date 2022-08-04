@@ -7,6 +7,14 @@
 #include "../utility/tic_toc.h"
 #include "../parameters.h"
 
+
+// 残差的维度 2
+// 第 i 帧的 位姿 3+4
+// 第 j 帧的 位姿 3+4
+// 相机与IMU的外参  3+4
+// 特征点的逆深度 1
+// 时间偏差 Td 1
+// 对imu-camera 时间戳同步和 Rolling shutter 相机的支持
 class ProjectionTdFactor : public ceres::SizedCostFunction<2, 7, 7, 7, 1, 1>
 {
   public:

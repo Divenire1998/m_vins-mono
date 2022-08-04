@@ -26,7 +26,7 @@ public:
           sum_dt{0.0}, delta_p{Eigen::Vector3d::Zero()}, delta_q{Eigen::Quaterniond::Identity()}, delta_v{Eigen::Vector3d::Zero()}
 
     {
-        // 噪声的协方差矩阵Q
+        // 噪声的协方差矩阵Q 离散化后的
         // 从配置文件中读取的
         noise = Eigen::Matrix<double, 18, 18>::Zero();
         noise.block<3, 3>(0, 0) = (ACC_N * ACC_N) * Eigen::Matrix3d::Identity();
@@ -84,7 +84,7 @@ public:
     {
         // ROS_INFO("midpoint integration");
 
-        // TODO 把代码和自己的笔记联系起来
+
         // 姿态预积分
         Vector3d un_gyr = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;
 
@@ -128,7 +128,7 @@ public:
                 -a_1_x(1), a_1_x(0), 0;
 
             // 计算F矩阵
-            // TODO 和笔记联系起来
+            // VINS预积分--中值积分 离散化
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt +
@@ -147,7 +147,7 @@ public:
             F.block<3, 3>(12, 12) = Matrix3d::Identity();
 
 
-            // TODO 和笔记联系起来
+            // VINS预积分--中值积分 离散化
             MatrixXd V = MatrixXd::Zero(15, 18);
             V.block<3, 3>(0, 0) = 0.25 * delta_q.toRotationMatrix() * _dt * _dt;
             V.block<3, 3>(0, 3) = 0.25 * -result_delta_q.toRotationMatrix() * R_a_1_x * _dt * _dt * 0.5 * _dt;
@@ -170,6 +170,18 @@ public:
         }
     }
 
+
+    /**
+    * @brief   IMU预积分传播方程
+    * @Description  积分计算两个关键帧之间IMU测量的变化量： 
+    *               旋转delta_q 速度delta_v 位移delta_p
+    *               加速度的biaslinearized_ba 陀螺仪的Bias linearized_bg
+    *               同时维护更新预积分的Jacobian和Covariance,计算优化时必要的参数
+    * @param[in]   _dt 时间间隔
+    * @param[in]   _acc_1 线加速度
+    * @param[in]   _gyr_1 角速度
+    * @return  void
+    */
     void propagate(double _dt, const Eigen::Vector3d &_acc_1, const Eigen::Vector3d &_gyr_1)
     {
         dt = _dt;
@@ -183,7 +195,7 @@ public:
         Vector3d result_linearized_ba;
         Vector3d result_linearized_bg;
 
-        // 更新IMU预积分约束的误差项、协方差、雅可比
+        // 更新IMU预积分的值、协方差、雅可比
         midPointIntegration(_dt, acc_0, gyr_0, _acc_1, _gyr_1, delta_p, delta_q, delta_v,
                             linearized_ba, linearized_bg,
                             result_delta_p, result_delta_q, result_delta_v,
@@ -199,38 +211,42 @@ public:
         linearized_ba = result_linearized_ba;
         linearized_bg = result_linearized_bg;
 
-        // 归一化一下
+        // 四元数归一化
         delta_q.normalize();
         sum_dt += dt;
         acc_0 = acc_1;
         gyr_0 = gyr_1;
     }
 
+
+    // 计算和给定相邻帧状态量的残差
+    // 在后端优化的IMU Factor中被调用
     Eigen::Matrix<double, 15, 1> evaluate(const Eigen::Vector3d &Pi, const Eigen::Quaterniond &Qi, const Eigen::Vector3d &Vi, const Eigen::Vector3d &Bai, const Eigen::Vector3d &Bgi,
                                           const Eigen::Vector3d &Pj, const Eigen::Quaterniond &Qj, const Eigen::Vector3d &Vj, const Eigen::Vector3d &Baj, const Eigen::Vector3d &Bgj)
     {
         Eigen::Matrix<double, 15, 1> residuals;
 
+        // 预积分量相对于误差状态量的雅克比
         Eigen::Matrix3d dp_dba = jacobian.block<3, 3>(O_P, O_BA);
         Eigen::Matrix3d dp_dbg = jacobian.block<3, 3>(O_P, O_BG);
-
         Eigen::Matrix3d dq_dbg = jacobian.block<3, 3>(O_R, O_BG);
-
         Eigen::Matrix3d dv_dba = jacobian.block<3, 3>(O_V, O_BA);
         Eigen::Matrix3d dv_dbg = jacobian.block<3, 3>(O_V, O_BG);
-
         Eigen::Vector3d dba = Bai - linearized_ba;
         Eigen::Vector3d dbg = Bgi - linearized_bg;
 
+        // 根据零偏的变化更新预积分的值
         Eigen::Quaterniond corrected_delta_q = delta_q * Utility::deltaQ(dq_dbg * dbg);
         Eigen::Vector3d corrected_delta_v = delta_v + dv_dba * dba + dv_dbg * dbg;
         Eigen::Vector3d corrected_delta_p = delta_p + dp_dba * dba + dp_dbg * dbg;
 
+        // 更新预积分残差
         residuals.block<3, 1>(O_P, 0) = Qi.inverse() * (0.5 * G * sum_dt * sum_dt + Pj - Pi - Vi * sum_dt) - corrected_delta_p;
         residuals.block<3, 1>(O_R, 0) = 2 * (corrected_delta_q.inverse() * (Qi.inverse() * Qj)).vec();
         residuals.block<3, 1>(O_V, 0) = Qi.inverse() * (G * sum_dt + Vj - Vi) - corrected_delta_v;
         residuals.block<3, 1>(O_BA, 0) = Baj - Bai;
         residuals.block<3, 1>(O_BG, 0) = Bgj - Bgi;
+
         return residuals;
     }
 

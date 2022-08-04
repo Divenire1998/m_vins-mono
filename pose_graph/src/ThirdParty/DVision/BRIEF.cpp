@@ -36,6 +36,8 @@ BRIEF::~BRIEF()
 
 // ---------------------------------------------------------------------------
 
+
+// 跟orbslam差不多
 void BRIEF::compute(const cv::Mat &image, 
     const std::vector<cv::KeyPoint> &points,
     vector<bitset> &descriptors,

@@ -46,7 +46,8 @@ int FeatureManager::getFeatureCount()
 }
 
 /**
- * @brief   将当前帧与地图中的其他帧建立数据关联，若为已知点，则加到共视关系中；若为新点，则新建一个特征点。
+ * @brief   1. 将路标点与滑动窗口内的其他路标点建立数据关联，若为已知点，则加到共视关系中；若为新点，则新建一个特征点。
+ *          2. 计算次新帧与次次新帧的视差，根据视察大小决定次新帧是否为关键帧
  * @param[in]   frame_count 窗口内帧的个数
  * @param[in]   image 某帧所有特征点的[camera_id,[x,y,z,u,v,vx,vy]]s构成的map,索引为feature_id
  * @param[in]   td IMU和cam同步时间差
@@ -88,6 +89,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
             //
             feature.back().feature_per_frame.push_back(f_per_fra);
         }
+
         // 如果这是一个已有的特征点，就在对应的“组织”下增加一个帧属性
         else if (it->feature_id == feature_id)
         {
@@ -117,7 +119,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
         }
     }
 
-    // 这个和上一帧没有相同的特征点
+    // 次新帧和次次新帧没有共视的路标点
     if (parallax_num == 0)
     {
         return true;
@@ -152,11 +154,15 @@ void FeatureManager::debugShow()
     }
 }
 
+
+
+//得到frame_count_l与frame_count_r两帧之间的对应特征点
 vector<pair<Vector3d, Vector3d>> FeatureManager::getCorresponding(int frame_count_l, int frame_count_r)
 {
     vector<pair<Vector3d, Vector3d>> corres;
     for (auto &it : feature)
     {
+        // 保证需要的特征点被这两帧都观察到
         if (it.start_frame <= frame_count_l && it.endFrame() >= frame_count_r)
         {
             Vector3d a = Vector3d::Zero(), b = Vector3d::Zero();
@@ -184,6 +190,8 @@ void FeatureManager::setDepth(const VectorXd &x)
 
         it_per_id.estimated_depth = 1.0 / x(++feature_index);
         // ROS_INFO("feature id %d , start_frame %d, depth %f ", it_per_id->feature_id, it_per_id-> start_frame, it_per_id->estimated_depth);
+
+        //    如果特征点的深度小于0
         if (it_per_id.estimated_depth < 0)
         {
             it_per_id.solve_flag = 2;

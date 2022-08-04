@@ -8,19 +8,22 @@ InitialEXRotation::InitialEXRotation(){
     ric = Matrix3d::Identity();
 }
 
+
+// 标定imu和相机之间的旋转外参，通过imu和图像计算的旋转使用手眼标定计算获得
 bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> corres, Quaterniond delta_q_imu, Matrix3d &calib_ric_result)
 {
 
     // 此frame_count是初始化类中的
     frame_count++;
 
-    // 根据两帧之间的特征点关系，计算对极几何，得到旋转矩阵
+    // 根据两帧之间的特征点关系，计算对极几何，得到旋转矩阵 Rck+1 ck
     Rc.push_back(solveRelativeR(corres));
 
     // 两个图像帧之间IMU的预积分约束
     Rimu.push_back(delta_q_imu.toRotationMatrix());
 
-    // 
+    // Rbc^{-1} * R_bk_bk+1 * R_bc
+    // Rckc+1 由IMU和外参计算得到的相机系下的旋转
     Rc_g.push_back(ric.inverse() * delta_q_imu * ric);
 
     // 存四元数的矩阵
@@ -37,14 +40,16 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         Quaterniond r2(Rc_g[i]);
 
         // 从旋转矩阵中计算角度的差值
+        //  R'ck+1 ck * Rckc+1
         double angular_distance = 180 / M_PI * r1.angularDistance(r2);
+        // 根据角度差来设置huber函数
+        // 对于角度大于5度的，对应的权重给小一点，更加不可信
+        double huber = angular_distance > 5.0 ? 5.0 / angular_distance : 1.0;
 
         // 
         // ROS_DEBUG("frame %d 's angular_distance is %f", i, angular_distance);
 
-        // 根据角度差来设置huber函数
-        // 对于角度大于5度的，对应的权重给小一点
-        double huber = angular_distance > 5.0 ? 5.0 / angular_distance : 1.0;
+
         ++sum_ok;
         Matrix4d L, R;
 
@@ -65,7 +70,7 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         R.block<1, 3>(3, 0) = -q.transpose();
         R(3, 3) = w;
 
-        // 构建A矩阵
+        // 构建A矩阵 带鲁棒核系数
         A.block<4, 4>((i - 1) * 4, 0) = huber * (L - R);
     }
 
@@ -81,12 +86,12 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
     Vector3d ric_cov;
     ric_cov = svd.singularValues().tail<3>();
 
-    // 至少11帧参与优化
+    // 至少10帧参与优化
     // 倒数第二奇异值大于0.25
     if (frame_count >= WINDOW_SIZE && ric_cov(1) > 0.25)
     {
         // 
-        ROS_DEBUG_STREAM("calib ex_rotation use"<<sum_ok);
+        ROS_DEBUG_STREAM("calib ex_rotation use"<<sum_ok<<"frame");
         calib_ric_result = ric;
 
         return true;

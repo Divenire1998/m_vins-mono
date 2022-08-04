@@ -1,4 +1,13 @@
+/*
+ * @Copyright: 
+ * @file name: File name
+ * @Data: Do not edit
+ * @LastEditor: 
+ * @LastData: 
+ * @Describe: 
+ */
 #include "pose_local_parameterization.h"
+
 
 bool PoseLocalParameterization::Plus(const double *x, const double *delta, double *x_plus_delta) const
 {
@@ -17,6 +26,8 @@ bool PoseLocalParameterization::Plus(const double *x, const double *delta, doubl
 
     return true;
 }
+
+
 bool PoseLocalParameterization::ComputeJacobian(const double *x, double *jacobian) const
 {
     Eigen::Map<Eigen::Matrix<double, 7, 6, Eigen::RowMajor>> j(jacobian);

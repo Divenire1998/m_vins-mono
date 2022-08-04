@@ -140,7 +140,6 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
 
         //调用cv::calcOpticalFlowPyrLK()对前一帧的特征点cur_pts进行LK金字塔光流跟踪，得到forw_pts
         // status标记了从前一帧cur_img到forw_img特征点的跟踪状态，无法被追踪到的点标记为0
-        // TODO更改光流的参数
         cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
 
         // Step 2 通过图像边界剔除outlier
