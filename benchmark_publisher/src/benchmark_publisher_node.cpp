@@ -35,11 +35,11 @@ struct Data
     Data(FILE *f)
     {
         if (fscanf(f, " %lf,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f", &t,
-               &px, &py, &pz,
-               &qw, &qx, &qy, &qz,
-               &vx, &vy, &vz,
-               &wx, &wy, &wz,
-               &ax, &ay, &az) != EOF)
+                   &px, &py, &pz,
+                   &qw, &qx, &qy, &qz,
+                   &vx, &vy, &vz,
+                   &wx, &wy, &wz,
+                   &ax, &ay, &az) != EOF)
         {
             t /= 1e9;
         }
@@ -65,16 +65,26 @@ tf::Transform trans;
 
 void odom_callback(const nav_msgs::OdometryConstPtr &odom_msg)
 {
-    //ROS_INFO("odom callback!");
+
+    // 需要先运行benchmark
     if (odom_msg->header.stamp.toSec() > benchmark.back().t)
-      return;
-  
+    {
+        ROS_WARN("run benchmark_pub first!!!");
+        return;
+    }
+
+    // 找到时间戳最近的真值ID
     for (; idx < static_cast<int>(benchmark.size()) && benchmark[idx].t <= odom_msg->header.stamp.toSec(); idx++)
         ;
 
 
+
+    // 跳过前50帧（初始化可能一开始没有位姿输出）
     if (init++ < SKIP)
     {
+        // 计算一下真值与输出轨迹的偏移量
+        // VIO输出的位姿和采集设备的坐标系可能不是一个坐标系
+        // 进行一下原点对齐
         baseRgt = Quaterniond(odom_msg->pose.pose.orientation.w,
                               odom_msg->pose.pose.orientation.x,
                               odom_msg->pose.pose.orientation.y,
@@ -82,7 +92,8 @@ void odom_callback(const nav_msgs::OdometryConstPtr &odom_msg)
                   Quaterniond(benchmark[idx - 1].qw,
                               benchmark[idx - 1].qx,
                               benchmark[idx - 1].qy,
-                              benchmark[idx - 1].qz).inverse();
+                              benchmark[idx - 1].qz)
+                      .inverse();
         baseTgt = Vector3d{odom_msg->pose.pose.position.x,
                            odom_msg->pose.pose.position.y,
                            odom_msg->pose.pose.position.z} -
@@ -90,6 +101,8 @@ void odom_callback(const nav_msgs::OdometryConstPtr &odom_msg)
         return;
     }
 
+
+    // 
     nav_msgs::Odometry odometry;
     odometry.header.stamp = ros::Time(benchmark[idx - 1].t);
     odometry.header.frame_id = "world";
@@ -117,9 +130,12 @@ void odom_callback(const nav_msgs::OdometryConstPtr &odom_msg)
     odometry.twist.twist.linear.z = tmp_V.z();
     pub_odom.publish(odometry);
 
+
+    // 发布轨迹
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header = odometry.header;
     pose_stamped.pose = odometry.pose.pose;
+
     path.header = odometry.header;
     path.poses.push_back(pose_stamped);
     pub_path.publish(path);
@@ -133,11 +149,11 @@ int main(int argc, char **argv)
     string csv_file = readParam<string>(n, "data_name");
     std::cout << "load ground truth " << csv_file << std::endl;
     FILE *f = fopen(csv_file.c_str(), "r");
-    if (f==NULL)
+    if (f == NULL)
     {
-      ROS_WARN("can't load ground truth; wrong path");
-      //std::cerr << "can't load ground truth; wrong path " << csv_file << std::endl;
-      return 0;
+        ROS_WARN("can't load ground truth; wrong path");
+        // std::cerr << "can't load ground truth; wrong path " << csv_file << std::endl;
+        return 0;
     }
     char tmp[10000];
     if (fgets(tmp, 10000, f) == NULL)
@@ -154,7 +170,7 @@ int main(int argc, char **argv)
     pub_path = n.advertise<nav_msgs::Path>("path", 1000);
 
     ros::Subscriber sub_odom = n.subscribe("estimated_odometry", 1000, odom_callback);
-    
+
     ros::Rate r(20);
     ros::spin();
 }

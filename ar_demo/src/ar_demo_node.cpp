@@ -1,27 +1,35 @@
 #include <ros/ros.h>
 #include <std_msgs/ColorRGBA.h>
+
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
+
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud.h>
+
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <cmath>
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Geometry>
+
 #include <vector>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
+
 #include <queue>
 #include <cmath>
 #include <algorithm> 
@@ -40,6 +48,7 @@ double FOCAL_LENGTH;
 const int axis_num = 0;
 const int cube_num = 1;
 const double box_length = 0.8;
+
 bool USE_UNDISTORED_IMG;
 bool pose_init = false;
 int img_cnt = 0;
@@ -60,12 +69,16 @@ std_msgs::ColorRGBA line_color_r;
 std_msgs::ColorRGBA line_color_g;
 std_msgs::ColorRGBA line_color_b;
 
+
 void axis_generate(visualization_msgs::Marker &line_list, Vector3d &origin, int id)
 {
 
+    // 设置线条的ID和参考坐标系
     line_list.id = id;
     line_list.header.frame_id = "world";
     line_list.header.stamp = ros::Time::now();
+
+    // 绘制XYZ
     line_list.action = visualization_msgs::Marker::ADD;
     line_list.type = visualization_msgs::Marker::LINE_LIST;
     line_list.scale.x = 0.1;
@@ -80,15 +93,19 @@ void axis_generate(visualization_msgs::Marker &line_list, Vector3d &origin, int 
     p.z = origin.z();
     line_list.points.push_back(p);
     line_list.colors.push_back(line_color_r);
+
     p.x += 1.0;
     line_list.points.push_back(p);
     line_list.colors.push_back(line_color_r);
+
     p.x -= 1.0;
     line_list.points.push_back(p);
     line_list.colors.push_back(line_color_g);
+
     p.y += 1.0;
     line_list.points.push_back(p);
     line_list.colors.push_back(line_color_g);
+
     p.y -= 1.0;
     line_list.points.push_back(p);
     line_list.colors.push_back(line_color_b);
@@ -121,6 +138,7 @@ void cube_generate(visualization_msgs::Marker &marker, Vector3d &origin, int id)
     marker.scale.y = box_length;
     marker.scale.z = box_length;
 
+    // 颜色
     marker.color.r = 0.0f;
     marker.color.g = 1.0f;
     marker.color.b = 0.0f;
@@ -146,21 +164,26 @@ void cube_generate(visualization_msgs::Marker &marker, Vector3d &origin, int id)
 
 void add_object()
 {
+
     visualization_msgs::MarkerArray markerArray_msg;
 
     visualization_msgs::Marker line_list;
     visualization_msgs::Marker cube_list;
 
+    // 生成一些坐标轴
     for (int i = 0; i < axis_num; i++)
     {
+        // ROS_INFO("gggggggggggggggggggggggggggggggg");
         axis_generate(line_list, Axis[i], i);
         markerArray_msg.markers.push_back(line_list);
     }
 
+    // 绘制立方体
     for (int i = 0; i <cube_num; i++)
     {
         cube_generate(cube_list, Cube_center[i], i);
     }
+
     //cube_generate(cube_list, Cube_center[2], 2);
     markerArray_msg.markers.push_back(cube_list);
 
@@ -169,6 +192,8 @@ void add_object()
 
 void project_object(Vector3d camera_p, Quaterniond camera_q)
 {
+
+
     for (int i = 0; i < axis_num; i++)
     {
         output_Axis[i].clear();
@@ -197,6 +222,8 @@ void project_object(Vector3d camera_p, Quaterniond camera_q)
         }
     } 
 
+
+
     for (int i = 0; i < cube_num; i++)
     {
         output_Cube[i].clear();
@@ -211,6 +238,7 @@ void project_object(Vector3d camera_p, Quaterniond camera_q)
         }
         else
             m_camera->spaceToPlane(local_point, local_uv);
+            
         if (local_point.z() > box_length / 2)
            //&& 0 <= local_uv.x() && local_uv.x() <= COL - 1 && 0 <= local_uv.y() && local_uv.y() <= ROW -1)
         {
@@ -359,7 +387,9 @@ void callback(const ImageConstPtr& img_msg, const nav_msgs::Odometry::ConstPtr p
         img_cnt ++;
         return;
     }
-   //ROS_INFO("sync callback!");
+
+
+   ROS_INFO("AR  callback!");
    Vector3d camera_p(pose_msg->pose.pose.position.x,
                      pose_msg->pose.pose.position.y,
                      pose_msg->pose.pose.position.z);
@@ -371,6 +401,8 @@ void callback(const ImageConstPtr& img_msg, const nav_msgs::Odometry::ConstPtr p
    //test plane
    Vector3d cam_z(0, 0, -1);
    Vector3d w_cam_z = camera_q * cam_z;
+
+    // 判断相机
    //cout << "angle " << acos(w_cam_z.dot(Vector3d(0, 0, 1))) * 180.0 / M_PI << endl;
    if (acos(w_cam_z.dot(Vector3d(0, 0, 1))) * 180.0 / M_PI < 90)
    {
@@ -379,6 +411,8 @@ void callback(const ImageConstPtr& img_msg, const nav_msgs::Odometry::ConstPtr p
    }
    else
         look_ground = 0;
+
+
 
    project_object(camera_p, camera_q);
 
@@ -477,17 +511,20 @@ void pose_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
         return;
     }
 
+    // pose来了 图像还没来
     if (img_buf.empty())
     {
-        //ROS_WARN("image coming late");
+        ROS_WARN("image coming late");
         return;
     }
 
+    // 时间戳同步一下
     while (img_buf.front()->header.stamp < pose_msg->header.stamp && !img_buf.empty())
     {
         img_buf.pop();
     }
 
+    // 都有数据
     if (!img_buf.empty())
     {
         callback(img_buf.front(), pose_msg);
@@ -503,6 +540,8 @@ int main( int argc, char** argv )
     object_pub = n.advertise<visualization_msgs::MarkerArray>("AR_object", 10);
     n.getParam("use_undistored_img", USE_UNDISTORED_IMG);
     ros::Subscriber sub_img;
+
+    // 订阅图像
     if (USE_UNDISTORED_IMG)
     {
         // the same as image crop
@@ -519,6 +558,7 @@ int main( int argc, char** argv )
         sub_img = n.subscribe("image_raw", 100, img_callback);
     }
 
+    // 
     Axis[0] = Vector3d(0, 1.5, -1.2);
     Axis[1]= Vector3d(-10, 5, 0);
     Axis[2] = Vector3d(3, 3, 3);
@@ -531,15 +571,19 @@ int main( int argc, char** argv )
     Cube_center[1] = Vector3d(4, -2, -1.2 + box_length / 2.0);
     Cube_center[2] = Vector3d(0, -2, -1.2 + box_length / 2.0);
 
+    // 订阅相机的位姿和地图点
     ros::Subscriber pose_img = n.subscribe("camera_pose", 100, pose_callback);
     ros::Subscriber sub_point = n.subscribe("pointcloud", 2000, point_callback);
+
     image_transport::ImageTransport it(n);
     pub_ARimage = it.advertise("AR_image", 1000);
 
     line_color_r.r = 1.0;
     line_color_r.a = 1.0;
+
     line_color_g.g = 1.0;
     line_color_g.a = 1.0;
+    
     line_color_b.b = 1.0;
     line_color_b.a = 1.0;
 
@@ -551,7 +595,7 @@ int main( int argc, char** argv )
     ros::Rate r(100);
     ros::Duration(1).sleep();
     add_object();
-    add_object();
+    // add_object();
     ros::spin();
 }
 

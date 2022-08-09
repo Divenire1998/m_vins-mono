@@ -276,6 +276,7 @@ void KeyFrame::PnPRANSAC(const vector<cv::Point2f> &matched_2d_old_norm,
 	Vector3d P_inital;
 
 	// 原始的VIO位姿 cam
+	// 因为3D点还是原始的VIO坐标系下的，没有变换
 	Matrix3d R_w_c = origin_vio_R * qic;
 	Vector3d T_w_c = origin_vio_T + origin_vio_R * tic;
 
@@ -344,7 +345,7 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 
 	TicToc t_match;
 
-#if 0
+#if 1
 	// 把回环的图像保存到文件系统中
 		if (DEBUG_IMAGE)    
 	    {
@@ -364,7 +365,7 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 	            cv::circle(loop_match_img, old_pt, 5, cv::Scalar(0, 255, 0));
 	        }
 	        ostringstream path;
-	        path << "/home/tony-ws1/raw_data/loop_image/"
+	        path << "/home/divenire/0_myWorkSpace/Divenire_ws/workingProgram/vins/catkin_vins_origin/src/VINS-Mono/results/loop_image/"
 	                << index << "-"
 	                << old_kf->index << "-" << "0raw_point.jpg";
 	        cv::imwrite( path.str().c_str(), loop_match_img);
@@ -373,7 +374,9 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 	// printf("search by des\n");
 
 	// 通过描述子来check
+	// 暴力匹配闭环帧和当前帧，结果会有很多外点
 	searchByBRIEFDes(matched_2d_old, matched_2d_old_norm, status, old_kf->brief_descriptors, old_kf->keypoints, old_kf->keypoints_norm);
+	
 	// 操作跟光流追踪类似，根据状态位进行筛选
 	reduceVector(matched_2d_cur, status);	   // 当前帧的像素坐标
 	reduceVector(matched_2d_old, status);	   // 回环帧的像素坐标
@@ -383,7 +386,7 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 	reduceVector(matched_id, status);		   // 当前帧对应的地图点索引
 											   // printf("search by des finish\n");
 
-#if 0 
+#if 1 
 		// 输出光流匹配的结果
 		if (DEBUG_IMAGE)
 	    {
@@ -413,16 +416,16 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 	        }
 
 	        ostringstream path, path1, path2;
-	        path <<  "/home/tony-ws1/raw_data/loop_image/"
+	        path <<  "/home/divenire/0_myWorkSpace/Divenire_ws/workingProgram/vins/catkin_vins_origin/src/VINS-Mono/results/loop_image/"
 	                << index << "-"
 	                << old_kf->index << "-" << "1descriptor_match.jpg";
 	        cv::imwrite( path.str().c_str(), loop_match_img);
 	        /*
-	        path1 <<  "/home/tony-ws1/raw_data/loop_image/"
+	        path <<  "/home/divenire/0_myWorkSpace/Divenire_ws/workingProgram/vins/catkin_vins_origin/src/VINS-Mono/results/loop_image/"
 	                << index << "-"
 	                << old_kf->index << "-" << "1descriptor_match_1.jpg";
 	        cv::imwrite( path1.str().c_str(), image);
-	        path2 <<  "/home/tony-ws1/raw_data/loop_image/"
+	        path <<  "/home/divenire/0_myWorkSpace/Divenire_ws/workingProgram/vins/catkin_vins_origin/src/VINS-Mono/results/loop_image/"
 	                << index << "-"
 	                << old_kf->index << "-" << "1descriptor_match_2.jpg";
 	        cv::imwrite( path2.str().c_str(), old_img);	        
@@ -441,7 +444,7 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 	reduceVector(matched_3d, status);
 	reduceVector(matched_id, status);
 
-#if 0
+#if 1
 	// 看看基础矩阵剔除的效果
 		if (DEBUG_IMAGE)
 	    {
@@ -471,7 +474,7 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 	        }
 
 	        ostringstream path;
-	        path <<  "/home/tony-ws1/raw_data/loop_image/"
+	        path <<  "/home/divenire/0_myWorkSpace/Divenire_ws/workingProgram/vins/catkin_vins_origin/src/VINS-Mono/results/loop_image/"
 	                << index << "-"
 	                << old_kf->index << "-" << "2fundamental_match.jpg";
 	        cv::imwrite( path.str().c_str(), loop_match_img);
@@ -542,13 +545,14 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 			putText(notation, "previous frame: " + to_string(old_kf->index) + "  sequence: " + to_string(old_kf->sequence), cv::Point2f(20 + COL + gap, 30), CV_FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255), 3);
 			cv::vconcat(notation, loop_match_img, loop_match_img);
 
-			/*
+			
 			ostringstream path;
-			path <<  "/home/tony-ws1/raw_data/loop_image/"
+			path <<  "/home/divenire/0_myWorkSpace/Divenire_ws/workingProgram/vins/catkin_vins_origin/src/VINS-Mono/results/loop_image/"
 					<< index << "-"
 					<< old_kf->index << "-" << "3pnp_match.jpg";
 			cv::imwrite( path.str().c_str(), loop_match_img);
-			*/
+			
+		
 			//若达到最小回环匹配点数，将loop_match_img的宽和高缩小一半并发布为pub_match_img
 			if ((int)matched_2d_cur.size() > MIN_LOOP_NUM)
 			{
@@ -594,8 +598,10 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 			// 和VIO线程的交互
 			if (FAST_RELOCALIZATION)
 			{
+				
 				sensor_msgs::PointCloud msg_match_points;
 				msg_match_points.header.stamp = ros::Time(time_stamp);
+
 				// 回环帧2d归一化坐标
 				for (int i = 0; i < (int)matched_2d_old_norm.size(); i++)
 				{
@@ -605,7 +611,9 @@ bool KeyFrame::findConnection(KeyFrame *old_kf)
 					p.z = matched_id[i]; // 对应的VIO地图点的id
 					msg_match_points.points.push_back(p);
 				}
-				Eigen::Vector3d T = old_kf->T_w_i; // 回环帧的pose
+
+				// 回环帧的pose T^w1_i
+				Eigen::Vector3d T = old_kf->T_w_i; 
 				Eigen::Matrix3d R = old_kf->R_w_i;
 				Quaterniond Q(R);
 				sensor_msgs::ChannelFloat32 t_q_index;

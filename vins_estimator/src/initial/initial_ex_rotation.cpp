@@ -118,7 +118,6 @@ Matrix3d InitialEXRotation::solveRelativeR(const vector<pair<Vector3d, Vector3d>
             rr.push_back(cv::Point2f(corres[i].second(0), corres[i].second(1)));
         }
         // 根据匹配的特征点求解本质矩阵
-        // TODO 这样说来，其实ORB中可以借鉴一下，因为这里没有RANSAC，在一部分环境下可能出现误匹配
         cv::Mat E = cv::findFundamentalMat(ll, rr);
         cv::Mat_<double> R1, R2, t1, t2;
 

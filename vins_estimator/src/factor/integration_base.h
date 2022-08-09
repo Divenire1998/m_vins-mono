@@ -14,10 +14,11 @@ class IntegrationBase
 {
 public:
     IntegrationBase() = delete;
+
     // 预积分类初始化
     // 初始的加速度陀螺仪及bias
     // 单位阵雅可比，预积分的协方差为0
-    // TODO
+    // VINS的IMU误差参数直接是离散形式的
     IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                     const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
         : acc_0{_acc_0}, gyr_0{_gyr_0}, linearized_acc{_acc_0}, linearized_gyr{_gyr_0},

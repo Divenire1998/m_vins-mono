@@ -94,7 +94,6 @@ void readParameters(ros::NodeHandle &n)
     CAM_NAMES.push_back(config_file);
 
     // 连续被WINDOW_SIZE帧给观测到，就是红色的特征点
-    // TODO 稳定？ 后端是关键帧还是普通帧判断稳定得？
     WINDOW_SIZE = 10;
     STEREO_TRACK = false;
 

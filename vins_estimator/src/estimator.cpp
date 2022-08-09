@@ -19,7 +19,6 @@ void Estimator::setParameter()
     f_manager.setRic(ric);
 
     // 虚拟相机
-    // TODO 这个参数干啥的？
     ProjectionFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     ProjectionTdFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
 
@@ -354,7 +353,7 @@ bool Estimator::initialStructure()
         {
             ROS_WARN("IMU init variation %f!", var);
             ROS_INFO("IMU init excitation not enouth!");
-            // TODO 我觉得打开还是比较必要的
+            // 我觉得打开还是比较必要的
             // return false;
         }
     }
@@ -402,8 +401,6 @@ bool Estimator::initialStructure()
                        sfm_f, sfm_tracked_points))
     {
         ROS_DEBUG("global SFM failed!");
-        // TODO marg掉老帧?
-        // 为什么我觉得直接丢就好了
         marginalization_flag = MARGIN_OLD;
         return false;
     }
@@ -547,7 +544,7 @@ bool Estimator::visualInitialAlign()
     for (int i = 0; i < NUM_OF_CAM; i++)
         TIC_TMP[i].setZero();
 
-    //重新计算特征点的深度
+    // 重新计算特征点的深度
     // 注意，仍带是尺度模糊的
     ric[0] = RIC[0];
     f_manager.setRic(ric);
@@ -817,15 +814,27 @@ void Estimator::double2vector()
     {
         Matrix3d relo_r;
         Vector3d relo_t;
+
+        // 计算优化后的回环帧位姿
         relo_r = rot_diff * Quaterniond(relo_Pose[6], relo_Pose[3], relo_Pose[4], relo_Pose[5]).normalized().toRotationMatrix();
         relo_t = rot_diff * Vector3d(relo_Pose[0] - para_Pose[0][0],
                                      relo_Pose[1] - para_Pose[0][1],
                                      relo_Pose[2] - para_Pose[0][2]) +
                  origin_P0;
+
+
+        // 计算世界系的漂移量
+        // prev_relo_r T^{w1}_i
+        // relo_r 优化前 T^{w2}_j
+        // relo_r 优化后 T^{w2}_i
+        // 计算T^{w1}_{w2}
         double drift_correct_yaw;
         drift_correct_yaw = Utility::R2ypr(prev_relo_r).x() - Utility::R2ypr(relo_r).x();
         drift_correct_r = Utility::ypr2R(Vector3d(drift_correct_yaw, 0, 0));
         drift_correct_t = prev_relo_t - drift_correct_r * relo_t;
+
+        // T_loop_w2 * T_w2_cur = T_loop_cur
+        // 后面发送给回环后端
         relo_relative_t = relo_r.transpose() * (Ps[relo_frame_local_index] - relo_t);
         relo_relative_q = relo_r.transpose() * Rs[relo_frame_local_index];
         relo_relative_yaw = Utility::normalizeAngle(Utility::R2ypr(Rs[relo_frame_local_index]).x() - Utility::R2ypr(relo_r).x());
@@ -946,7 +955,7 @@ void Estimator::optimization()
     {
         problem.AddParameterBlock(para_Td[0], 1);
 
-        // TODO 如果有了一个比较准的时间偏差，可以向上面一样，fix住
+        //  如果有了一个比较准的时间偏差，可以向上面一样，fix住
         // problem.SetParameterBlockConstant(para_Td[0]);
     }
 
@@ -1046,6 +1055,7 @@ void Estimator::optimization()
     ROS_DEBUG("prepare for ceres: %f", t_prepare.toc());
 
     // 回环检测的约束
+    // 添加闭环检测残差，计算滑动窗口中与每一个闭环关键帧的相对位姿，这个相对位置是为后面的图优化准备
     if (relocalization_info)
     {
         // printf("set relocalization factor! \n");
@@ -1056,26 +1066,41 @@ void Estimator::optimization()
 
         int retrive_feature_index = 0;
         int feature_index = -1;
+
+        // 遍历现有特征点
         for (auto &it_per_id : f_manager.feature)
         {
             it_per_id.used_num = it_per_id.feature_per_frame.size();
             if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
                 continue;
             ++feature_index;
+
+            // 特征点的起始帧
             int start = it_per_id.start_frame;
+
+            // 特征点能够被对应的当前帧看到
             if (start <= relo_frame_local_index)
             {
+                // 寻找回环帧能看到的特征点
                 while ((int)match_points[retrive_feature_index].z() < it_per_id.feature_id)
                 {
                     retrive_feature_index++;
                 }
+
+                // 这个地图点也能被回环帧看到
                 if ((int)match_points[retrive_feature_index].z() == it_per_id.feature_id)
                 {
+                    // 构建一个重投影约束，这个地图点的起始帧和该回环帧之间
                     Vector3d pts_j = Vector3d(match_points[retrive_feature_index].x(), match_points[retrive_feature_index].y(), 1.0);
                     Vector3d pts_i = it_per_id.feature_per_frame[0].point;
 
                     ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
-                    problem.AddResidualBlock(f, loss_function, para_Pose[start], relo_Pose, para_Ex_Pose[0], para_Feature[feature_index]);
+                    problem.AddResidualBlock(f,
+                                             loss_function, // 特征点可能会带来误匹配
+                                             para_Pose[start],
+                                             relo_Pose,
+                                             para_Ex_Pose[0],
+                                             para_Feature[feature_index]);
                     retrive_feature_index++;
                 }
             }
@@ -1177,8 +1202,8 @@ void Estimator::optimization()
                                                            para_SpeedBias[0], // to marg
                                                            para_Pose[1],
                                                            para_SpeedBias[1]},
-                                          vector<int>{0, 1}); 
-                                          //待marg的变量序号为0，1 也就是para_Pose[0]和para_SpeedBias[0]
+                                          vector<int>{0, 1});
+                //待marg的变量序号为0，1 也就是para_Pose[0]和para_SpeedBias[0]
 
                 marginalization_info->addResidualBlockInfo(residual_block_info);
             }
@@ -1561,22 +1586,38 @@ void Estimator::slideWindowOld()
         f_manager.removeBack();
 }
 
+/**
+ * @brief 接受回环帧的消息
+ *
+ * @param[in] _frame_stamp
+ * @param[in] _frame_index
+ * @param[in] _match_points
+ * @param[in] _relo_t
+ * @param[in] _relo_r
+ */
 void Estimator::setReloFrame(double _frame_stamp, int _frame_index, vector<Vector3d> &_match_points, Vector3d _relo_t, Matrix3d _relo_r)
 {
+
+    // 赋值操作,保存一下
     relo_frame_stamp = _frame_stamp;
     relo_frame_index = _frame_index;
     match_points.clear();
     match_points = _match_points;
+    // 回环帧的pose T^w1_i 保存一下
     prev_relo_t = _relo_t;
     prev_relo_r = _relo_r;
+
+    // 在滑窗里寻找 回环检测中当前帧
+    // 在目前滑窗里的位置看看有没有被划走
+    // 在滑窗中寻找当前帧，因为VIO送给回环结点的是倒数第三帧，因此，很有可能这个当前帧还在滑窗里
     for (int i = 0; i < WINDOW_SIZE; i++)
     {
         if (relo_frame_stamp == Headers[i].stamp.toSec())
         {
-            relo_frame_local_index = i;
-            relocalization_info = 1;
+            relo_frame_local_index = i; // 对应滑窗中的第i帧
+            relocalization_info = 1;    // 这是一个有效的回环信息
             for (int j = 0; j < SIZE_POSE; j++)
-                relo_Pose[j] = para_Pose[i][j];
+                relo_Pose[j] = para_Pose[i][j];  // relo_Pose 赋初值为T^w2_j,后续通过PnP关系，优化得到T^w2_i
         }
     }
 }

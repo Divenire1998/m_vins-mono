@@ -286,7 +286,6 @@ void process()
     while (true)
     {
 
-        //
         std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> measurements;
         std::unique_lock<std::mutex> lk(m_buf);
 
@@ -357,8 +356,6 @@ void process()
             }
 
             // =============== 回环检测 ====================
-            // TODO
-
             // set relocalization frame
             // 回环相关部分
             sensor_msgs::PointCloudConstPtr relo_msg = NULL;
@@ -372,11 +369,13 @@ void process()
             // 有效回环信息
             if (relo_msg != NULL)
             {
+                // 匹配的特征点
                 vector<Vector3d> match_points;
 
-                // 回环的当前帧时间戳
+                // 回环帧的时间戳
                 double frame_stamp = relo_msg->header.stamp.toSec();
 
+                // 回环帧的归一化坐标和地图点
                 for (unsigned int i = 0; i < relo_msg->points.size(); i++)
                 {
                     Vector3d u_v_id;
@@ -386,12 +385,16 @@ void process()
                     match_points.push_back(u_v_id);
                 }
 
-                // 回环帧的位姿
+                // 回环帧的pose T^w1_i
                 Vector3d relo_t(relo_msg->channels[0].values[0], relo_msg->channels[0].values[1], relo_msg->channels[0].values[2]);
                 Quaterniond relo_q(relo_msg->channels[0].values[3], relo_msg->channels[0].values[4], relo_msg->channels[0].values[5], relo_msg->channels[0].values[6]);
                 Matrix3d relo_r = relo_q.toRotationMatrix();
+
+                // 回环帧的ID号
                 int frame_index;
                 frame_index = relo_msg->channels[0].values[7];
+
+                // 保存一下回环帧的位姿
                 estimator.setReloFrame(frame_stamp, frame_index, match_points, relo_t, relo_r);
             }
 
@@ -425,9 +428,7 @@ void process()
             // 紧耦合VIO
             estimator.processImage(image, img_msg->header);
 
-
-             // =============== 输出调试信息 ====================
-
+            // =============== 输出调试信息 ====================
 
             // 输出统计信息
             double whole_t = t_s.toc();
@@ -437,21 +438,36 @@ void process()
             std_msgs::Header header = img_msg->header;
             header.frame_id = "world";
 
-            pubOdometry(estimator, header);   //"odometry" 里程计信息PQV
-            pubKeyPoses(estimator, header);   //"key_poses" 关键点三维坐标
-            pubCameraPose(estimator, header); //"camera_pose" 相机位姿
-            pubPointCloud(estimator, header); //"history_cloud" 点云信息
-            pubTF(estimator, header);         //"extrinsic" 相机到IMU的外参
-            pubKeyframe(estimator);           //"keyframe_point"、"keyframe_pose" 关键帧位姿和点云
+            //"odometry" 里程计信息PQV
+            pubOdometry(estimator, header);
 
+            //"key_poses" 滑动窗口内的关键帧3维位置
+            pubKeyPoses(estimator, header);
+
+            //"camera_pose" 相机位姿
+            // "pub_camera_pose_visual"
+            pubCameraPose(estimator, header);
+
+            // 发布滑窗内点云信息以及要被marg除去的点云信息
+            pubPointCloud(estimator, header);
+
+            // "TF"发布相机、IMU、世界系三者的坐标变换关系
+            pubTF(estimator, header);
+
+            //"keyframe_point"、"keyframe_pose" 关键帧位姿和点云
+            pubKeyframe(estimator);
+
+            //"relo_relative_pose" 世界系的漂移量
             if (relo_msg != NULL)
-                pubRelocalization(estimator); //"relo_relative_pose" 重定位位姿
+                pubRelocalization(estimator);
+
             // ROS_ERROR("end: %f, at %f", img_msg->header.stamp.toSec(), ros::Time::now().toSec());
         }
         m_estimator.unlock();
         m_buf.lock();
         m_state.lock();
 
+        // 更新一下临时量
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
             update();
         m_state.unlock();
@@ -477,6 +493,8 @@ int main(int argc, char **argv)
     readParameters(n);
 
     // 根据读取的参数设置估计器
+    // 1. 设置外参
+    // 2. 相机的测量误差
     estimator.setParameter();
 
 #ifdef EIGEN_DONT_PARALLELIZE

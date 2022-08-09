@@ -148,7 +148,7 @@ void readParameters(ros::NodeHandle &n)
     
     fsSettings.release();
 
-    // TODO 干啥的?
+    // 没用上
     INIT_DEPTH = 5.0;
     BIAS_ACC_THRESHOLD = 0.1;
     BIAS_GYR_THRESHOLD = 0.1;

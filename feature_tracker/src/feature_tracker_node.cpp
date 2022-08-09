@@ -209,6 +209,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         // 显示一下发送给后端处理得光流跟踪信息
         if (SHOW_TRACK)
         {
+
+
+            // ===================== OPENCV绘制跟踪情况 ==================
             ptr = cv_bridge::cvtColor(ptr, sensor_msgs::image_encodings::BGR8);
             // cv::Mat stereo_img(ROW * NUM_OF_CAM, COL, CV_8UC3);
             cv::Mat stereo_img = ptr->image;

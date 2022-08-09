@@ -96,15 +96,25 @@ void CameraPoseVisualization::add_loopedge(const Eigen::Vector3d& p0, const Eige
 }
 
 
+
+
+/**
+ * @brief: 根据当前相机的位姿，绘制框框
+ * @param {Vector3d&} p
+ * @param {Quaterniond&} q
+ * @return {*}
+ */
 void CameraPoseVisualization::add_pose(const Eigen::Vector3d& p, const Eigen::Quaterniond& q) {
     visualization_msgs::Marker marker;
 
     marker.ns = m_marker_ns;
     marker.id = m_markers.size() + 1;
+    // 线条
     marker.type = visualization_msgs::Marker::LINE_STRIP;
     marker.action = visualization_msgs::Marker::ADD;
     marker.scale.x = m_line_width;
 
+    // 先给个单位阵，在原点
     marker.pose.position.x = 0.0;
     marker.pose.position.y = 0.0;
     marker.pose.position.z = 0.0;
@@ -116,6 +126,7 @@ void CameraPoseVisualization::add_pose(const Eigen::Vector3d& p, const Eigen::Qu
 
     geometry_msgs::Point pt_lt, pt_lb, pt_rt, pt_rb, pt_oc, pt_lt0, pt_lt1, pt_lt2;
 
+    // 相机的框框转换一下坐标
     Eigen2Point(q * (m_scale *imlt) + p, pt_lt);
     Eigen2Point(q * (m_scale *imlb) + p, pt_lb);
     Eigen2Point(q * (m_scale *imrt) + p, pt_rt);

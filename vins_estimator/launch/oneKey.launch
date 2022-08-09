@@ -9,7 +9,11 @@
     <!-- 启动ROSBAG -->
     <node pkg="rosbag" type="play" name="play" 
     args = "/media/divenire/C86BCECE98B60C8B/0_myWorkSpace/Datasets/Euroc/bag/MH_05_difficult.bag"
-    output = "log" />
+    output = "log"  respawn = "true"/>
+
+    <!-- 启动benchmark -->
+    <include file = "$(find benchmark_publisher)/launch/publish.launch" />
+
 
     <!-- 启动feature_tracker节点 并传入包和配置文件的路径 -->
     <!-- name:节点名称（ROS拓扑中） -->
