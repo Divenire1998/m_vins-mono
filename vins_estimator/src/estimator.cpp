@@ -859,18 +859,18 @@ bool Estimator::failureDetection()
     if (Bas[WINDOW_SIZE].norm() > 2.5)
     {
         ROS_INFO(" big IMU acc bias estimation %f", Bas[WINDOW_SIZE].norm());
-        return true;
+        // return true;
     }
     if (Bgs[WINDOW_SIZE].norm() > 1.0)
     {
         ROS_INFO(" big IMU gyr bias estimation %f", Bgs[WINDOW_SIZE].norm());
-        return true;
+        // return true;
     }
 
     if (tic[0].norm() > 1)
     {
-        ROS_INFO(" big extri param estimation %d", tic[0].norm() > 1);
-        return true;
+        ROS_INFO(" big extri param estimation %d", tic[0].norm());
+        // return true;
     }
 
     // 两帧之间运动过快

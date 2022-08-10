@@ -1,15 +1,28 @@
 <launch>
+
     <!-- 定义 Euroc配置文件的存储路径-->
     <arg name="config_path" default = "$(find feature_tracker)/../config/euroc/euroc_config.yaml" />
 	<arg name="vins_path" default = "$(find feature_tracker)/../config/../" />
-    
-    <!-- 启动rviz -->
-    <include file = "$(find vins_estimator)/launch/vins_rviz.launch" />
-
     <!-- 启动ROSBAG -->
     <node pkg="rosbag" type="play" name="play" 
     args = "/media/divenire/C86BCECE98B60C8B/0_myWorkSpace/Datasets/Euroc/bag/MH_05_difficult.bag"
-    output = "log"  respawn = "true"/>
+    output = "log"  respawn = "true"/>    
+
+
+
+    <!-- 定义 KAIST配置文件的存储路径-->
+    <!-- <arg name="config_path" default = "$(find feature_tracker)/../config/kaist/kaist.yaml" />
+	<arg name="vins_path" default = "$(find feature_tracker)/../config/../" /> -->
+
+    <!-- 启动ROSBAG -->
+    <!-- <node pkg="rosbag" type="play" name="play" 
+    args = "/media/divenire/C86BCECE98B60C8B/0_myWorkSpace/Datasets/complex_urban/urban38/urban38/urban38.bag"
+    output = "log"  respawn = "true"/>     -->
+
+
+
+    <!-- 启动rviz -->
+    <include file = "$(find vins_estimator)/launch/vins_rviz.launch" />
 
     <!-- 启动benchmark -->
     <include file = "$(find benchmark_publisher)/launch/publish.launch" />

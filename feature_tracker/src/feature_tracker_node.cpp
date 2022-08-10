@@ -18,6 +18,9 @@ queue<sensor_msgs::ImageConstPtr> img_buf;
 ros::Publisher pub_img, pub_match;
 ros::Publisher pub_restart;
 
+
+map<int, cv::Point2f> prevLeftPtsMap;
+
 //每个相机都有一个FeatureTracker实例，即trackerData[i]
 FeatureTracker trackerData[NUM_OF_CAM];
 
@@ -216,6 +219,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             // cv::Mat stereo_img(ROW * NUM_OF_CAM, COL, CV_8UC3);
             cv::Mat stereo_img = ptr->image;
 
+
+
+
+
             for (int i = 0; i < NUM_OF_CAM; i++)
             {
                 cv::Mat tmp_img = stereo_img.rowRange(i * ROW, (i + 1) * ROW);
@@ -243,17 +250,40 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     tmp_prev_un_pts.head(2) = tmp_cur_un_pts - tmp_pts_velocity / FREQ;
                     tmp_prev_un_pts.z() = 1;
 
+
+
                     Vector2d tmp_prev_uv;
-                    // 投影到像素平面上
+                    // 投影到像素平面上,
                     trackerData[i].m_camera->spaceToPlane(tmp_prev_un_pts, tmp_prev_uv);
                     cv::line(tmp_img, trackerData[i].cur_pts[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255, 0, 0), 1, 8, 0);
+
+
+                    map<int, cv::Point2f>::iterator mapIt;
+                    for(size_t i = 0;i<trackerData[0].cur_pts.size();++i)
+                    {
+                        int id = trackerData[0].ids[i];
+                        mapIt = prevLeftPtsMap.find(id);
+                            if(mapIt != prevLeftPtsMap.end())
+                                cv::arrowedLine(tmp_img, trackerData[0].cur_pts[i], mapIt->second, cv::Scalar(0, 255, 0), 1, 8, 0, 0.2);
+                    }
+
 
                     // 绘制特征点的ID号
                     char name[10];
                     sprintf(name, "%d", trackerData[i].ids[j]);
                     cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                
+
+
+                
                 }
             }
+            
+            prevLeftPtsMap.clear();
+            for(size_t i = 0 ; i<trackerData[0].cur_pts.size();++i)
+                prevLeftPtsMap[trackerData[0].ids[i]] = trackerData[0].cur_pts[i];
+
+
             cv::imshow("vis", stereo_img);
             cv::waitKey(3);
 
